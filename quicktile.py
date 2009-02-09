@@ -163,7 +163,9 @@ class WindowManager(object):
         Given a window, return a tuple of:
          - the rectangle for its dimensions (decorations included),
            relative to the monitor the window is on
-         - the rectangle for the monitor the window is in (panels included),
+         - the rectangle for the workarea dimensions (panel excluded),
+           relative to the monitor the window is on
+         - the rectangle for the monitor the window is in (panels excluded),
            relative to the root window
         """
         # Calculate the size of the wm decorations
@@ -180,16 +182,34 @@ class WindowManager(object):
         #FIXME: How do I retrieve the root window from a given one?
         monitorID = self._root.get_monitor_at_window(win)
         monitorGeom = self._root.get_monitor_geometry(monitorID)
+
         winFramedGeom = gtk.gdk.Rectangle(screenposx - monitorGeom.x,
                 screenposy - monitorGeom.y, w, h)
+        # FIXME: _NET_WORKAREA only gives us the workarea of the first monitor
+        # assume other monitors have the same panels as a hack
+        if self._root.supports_net_wm_hint('_NET_WORKAREA'):
+            rootwin = self._root.get_root_window()
+            p = rootwin.property_get('_NET_WORKAREA')
+            firstWorkareaGeom = p[2][0:4]
+            firstMonitorGeom = self._root.get_monitor_geometry(0)
+            deltas = [firstWorkareaGeom[i] - firstMonitorGeom[i]
+                for i in range(0, 4)]
+            workareaGeom = gtk.gdk.Rectangle(deltas[0], deltas[1],
+                *[monitorGeom[i] + deltas[i] for i in range(2, 4)])
+        else:
+            workareaGeom = monitorGeom
+        
         logging.debug('get_combined_dimensions: monitorGeom: %r' % (
             tuple(monitorGeom), ))
+        logging.debug('get_combined_dimensions: workareaGeom: %r' % (
+            tuple(workareaGeom), ))
         logging.debug('get_combined_dimensions: winFramedGeom: %r' % (
             tuple(winFramedGeom), ))
 
-        return monitorGeom, winFramedGeom
+        return winFramedGeom, workareaGeom, monitorGeom
 
-    def reposition(self, win, framedGeom, monitor=gtk.gdk.Rectangle(0,0,0,0)):
+    def reposition(self, win, framedGeom, monitor=gtk.gdk.Rectangle(0,0,0,0),
+            workarea=gtk.gdk.Rectangle(0,0,0,0)):
         """
         Position and size a window, decorations inclusive, according to the
         provided target window and monitor geometry rectangles.
@@ -231,14 +251,16 @@ class WindowManager(object):
 
         Returns the chosen gtk.gdk.Rectangle.
         """
-        win, monitorG, winG = self.getGeometries(window)[0:3]
+        win, monitorG, workareaG, winG = self.getGeometries()[0:4]
 
+        # construct the list of target framed geometries within the workspace
+        # relative to the current monitor
         dims = []
         for tup in dimensions:
-            dims.append((int(tup[0] * monitorG.width),
-                         int(tup[1] * monitorG.height),
-                         int(tup[2] * monitorG.width),
-                         int(tup[3] * monitorG.height)))
+            dims.append((int(tup[0] * workareaG.width) + workareaG.x,
+                         int(tup[1] * workareaG.height + workareaG.y),
+                         int(tup[2] * workareaG.width),
+                         int(tup[3] * workareaG.height)))
 
         result = None
 
@@ -256,14 +278,29 @@ class WindowManager(object):
             logging.debug('no match, picked first slot, geometry %r' % (
                 tuple(result), ))
 
-        self.reposition(win, result, monitorG)
+        self.reposition(win, result, monitorG, workareaG)
 
     def match(self, win, framedGeom, targetGeom):
         """
         Check if the framed geometry for the window is a close enough match
         for the target framed geometry.
         """
-        return tuple(framedGeom) == tuple(targetGeom)
+        # x and y should match perfectly
+        if framedGeom[0] != targetGeom[0]:
+            return False
+        if framedGeom[1] != targetGeom[1]:
+            return False
+
+        wDelta = framedGeom[2] - targetGeom[2]
+        hDelta = framedGeom[3] - targetGeom[3]
+
+        # FIXME: use window hints to get more accurate targets
+        if abs(wDelta) < 20 and abs(hDelta) < 20:
+            logging.debug('window width/height deltas acceptable: %d, %d' % (
+                wDelta, hDelta))
+            return True
+
+        return False
 
     def getGeometries(self, win=None):
         """
@@ -276,8 +313,10 @@ class WindowManager(object):
 
         Returns a 4-tuple of:
          - the window object
-         - two gtk.gdk.Rectangle objects containing the monitor and window
-           geometry, respectively,
+         - a gtk.gdk.Rectangle object for the workarea (without panels),
+           relative to the root window
+           a gtk.gdk.Rectangle object for the framed window geometry,
+           relative to the monitor it's on
          - the monitor ID (for multi-head desktops).
 
         Returns (None, None, None, None) if:
@@ -288,13 +327,13 @@ class WindowManager(object):
         win = win or self.get_active_window()
 
         if not win:
-            return None, None, None, None
+            return None, None, None, None, None
 
-        monitorGeom, winGeom = self.get_combined_dimensions(win)
+        winFramedGeom, workareaGeom, monitorGeom = self.get_combined_dimensions(win)
         monitorID = self._root.get_monitor_at_window(win)
 
         logging.debug('getGeometries: monitorId: %r' % (monitorID, ))
-        return win, monitorGeom, winGeom, monitorID
+        return win, monitorGeom, workareaGeom, winFramedGeom, monitorID
 
 
     # command dispatcher
@@ -315,7 +354,7 @@ class WindowManager(object):
         monitor unchanged.
         """
 
-        win, monitorG, winG, monitorID = getGeometries()
+        win, monitorG, workareaG, winG, monitorID = self.getGeometries()
 
         monitorCount = self._root.get_n_monitors()
 
