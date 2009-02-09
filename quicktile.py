@@ -49,6 +49,7 @@ import pygtk
 pygtk.require('2.0')
 
 import errno, gtk, gobject, sys
+import logging
 
 try:
     from Xlib import X
@@ -229,24 +230,27 @@ class WindowManager(object):
     def getGeometries(self, win=None):
         """
         Get the geometry for the given window (including window decorations)
-        and the monitor it's on. If not window is specified, the active window
+        and the monitor it's on. If no window is specified, the active window
         is used.
 
-        Window geometry is relative to the monitor, not the desktop.
+        Window geometry is returned relative to the monitor, not the desktop.
 
-        Returns a tuple of the window object, two gtk.gdk.Rectangle objects
-        containing the monitor and window geometry, respectively, and the
-        monitor ID (for multi-head desktops).
+        Returns a 4-tuple of:
+         - the window object
+         - two gtk.gdk.Rectangle objects containing the monitor and window
+           geometry, respectively,
+         - the monitor ID (for multi-head desktops).
 
-        Returns (None, None, None) if the specified window is a desktop window
-        or if no window was specified and _NET_ACTIVE_WINDOW is unsupported.
+        Returns (None, None, None, None) if:
+         - the specified window is a desktop window; or if:
+         - no window was specified and _NET_ACTIVE_WINDOW is unsupported.
         """
         # Get the root and active window
         root = gtk.gdk.screen_get_default()
         win = win or self.get_active_window()
 
         if not win:
-            return None, None, None
+            return None, None, None, None
 
         # Calculate the size of the wm decorations
         winw, winh = win.get_geometry()[2:4]
@@ -262,6 +266,9 @@ class WindowManager(object):
         winGeom = gtk.gdk.Rectangle(screenposx - monitorGeom.x,
                 screenposy - monitorGeom.y, w, h)
 
+        logging.debug('getGeometries: monitorId: %r' % (monitorID, ))
+        logging.debug('getGeometries: monitorGeom: %r' % (tuple(monitorGeom), ))
+        logging.debug('getGeometries: winGeom: %r' % (tuple(winGeom), ))
         return win, monitorGeom, winGeom, monitorID
 
 
@@ -312,8 +319,15 @@ if __name__ == '__main__':
         help="Use python-xlib to set up keybindings and then wait.")
     parser.add_option('--valid-args', action="store_true", dest="showArgs",
         default=False, help="List valid arguments for use without --bindkeys.")
+    parser.add_option('-d', '--debug', action="store_true", dest="debug",
+        default=False,
+        help="Show debug output.")
 
     opts, args = parser.parse_args()
+
+    if opts.debug:
+        logging.basicConfig(level=logging.DEBUG)
+        logging.debug('debug enabled')
 
     if opts.daemonize:
         if not XLIB_PRESENT:
