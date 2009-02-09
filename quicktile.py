@@ -58,37 +58,6 @@ try:
 except ImportError:
     XLIB_PRESENT = False
 
-def cycleMonitors(window=None):
-    """
-    Cycle the specified window (the active window if none was explicitly
-    specified) between monitors while leaving the position within the monitor
-    unchanged.
-    """
-
-    win, monitorG, winG, monitorID = getGeometries()
-
-    root = gtk.gdk.screen_get_default()
-    monitorCount = root.get_n_monitors()
-
-    newMonitorID = (monitorID + 1 < monitorCount) and monitorID + 1 or 0
-    newMonitorG = root.get_monitor_geometry(newMonitorID)
-
-    if win.get_state() & gtk.gdk.WINDOW_STATE_MAXIMIZED:
-        toggleMaximize(win)
-        positionWindow(win, winG, newMonitorG)
-        toggleMaximize(win)
-    else:
-        positionWindow(win, winG, newMonitorG)
-
-def toggleMaximize(win=None, state=None):
-    if not win:
-        win, monitorG, winG, monitorID = getGeometries()
-
-    if state is False or (state is None and (win.get_state() & gtk.gdk.WINDOW_STATE_MAXIMIZED)):
-        win.unmaximize() #FIXME: This isn't doing anything for some reason.
-    else:
-        win.maximize()
-
 positions = {
     'left'           : ((0,     0,   0.5,   1  ), (0,         0,   1.0/3, 1  ), (0,     0,   1.0/3 * 2, 1)),
     'middle'         : ((0,     0,     1,   1  ), (1.0/3,     0,   1.0/3, 1  ), (1.0/6, 0,   1.0/3 * 2, 1)),
@@ -99,8 +68,8 @@ positions = {
     'top-right'      : ((0.5,   0,   0.5,   0.5), (1.0/3 * 2, 0,   1.0/3, 0.5), (1.0/3, 0,   1.0/3 * 2, 0.5)),
     'bottom-left'    : ((0,     0.5, 0.5,   0.5), (0,         0.5, 1.0/3, 0.5), (0,     0.5, 1.0/3 * 2, 0.5)),
     'bottom-right'   : ((0.5,   0.5, 0.5,   0.5), (1.0/3 * 2, 0.5, 1.0/3, 0.5), (1.0/3, 0.5, 1.0/3 * 2, 0.5)),
-    'maximize'       : toggleMaximize,
-    'monitor-switch' : cycleMonitors,
+    'maximize'       : 'toggleMaximize',
+    'monitor-switch' : 'cycleMonitors',
 }
 
 if XLIB_PRESENT:
@@ -179,6 +148,50 @@ class WindowManager(object):
         win.move_resize(geom.x + monitor.x, geom.y + monitor.y,
                 geom.width - (border * 2), geom.height - (titlebar + border))
 
+    def toggleMaximize(self, win=None, state=None):
+        if not win:
+            win, monitorG, winG, monitorID = getGeometries()
+
+        if state is False or (state is None and (win.get_state() & gtk.gdk.WINDOW_STATE_MAXIMIZED)):
+            win.unmaximize() #FIXME: This isn't doing anything for some reason.
+        else:
+            win.maximize()
+
+    # command dispatcher
+    def doCommand(self, command):
+        """Resolve a textual positioning command and execute it."""
+        command = positions[command]
+        if isinstance(command, (tuple, list)):
+            cycleDimensions(command)
+        else:
+            methodName = 'do_' + command
+            getattr(self, methodName)()
+
+    # command implementations
+    def do_cycleMonitors(self, window=None):
+        """
+        Cycle the specified window (the active window if none was explicitly
+        specified) between monitors while leaving the position within the monitor
+        unchanged.
+        """
+
+        win, monitorG, winG, monitorID = getGeometries()
+
+        root = gtk.gdk.screen_get_default()
+        monitorCount = root.get_n_monitors()
+
+        newMonitorID = (monitorID + 1 < monitorCount) and monitorID + 1 or 0
+        newMonitorG = root.get_monitor_geometry(newMonitorID)
+
+        if win.get_state() & gtk.gdk.WINDOW_STATE_MAXIMIZED:
+            toggleMaximize(win)
+            positionWindow(win, winG, newMonitorG)
+            toggleMaximize(win)
+        else:
+            positionWindow(win, winG, newMonitorG)
+
+    def do_toggleMaximize(self, win=None, state=None):
+        self.toggleMaximize(self, win, state)
 
 def get_frame_thickness(win):
     """Given a window, return a (border, titlebar) thickness tuple."""
@@ -264,15 +277,9 @@ def cycleDimensions(dimensions, window=None):
 
     positionWindow(win, result, monitorG)
 
-def doCommand(command):
-    """Resolve a textual positioning command and execute it."""
-    command = positions[command]
-    if isinstance(command, (tuple, list)):
-        cycleDimensions(command)
-    else:
-        command()
-
 if __name__ == '__main__':
+    wm = WindowManager()
+
     from optparse import OptionParser
     parser = OptionParser(usage="%prog [options] [arguments]",
             version="%%prog v%s" % __version__)
@@ -309,7 +316,7 @@ if __name__ == '__main__':
                 xevent = handle.next_event()
                 if xevent.type == X.KeyPress:
                     keycode = xevent.detail
-                    doCommand(keys[keycode])
+                    wm.doCommand(keys[keycode])
             return True
 
         # Merge python-xlib into the Glib event loop and start things going.
@@ -330,7 +337,7 @@ if __name__ == '__main__':
                 sys.exit(errno.ENOENT)
 
         for arg in args:
-            doCommand(args[0])
+            wm.doCommand(args[0])
         while gtk.events_pending():
             gtk.main_iteration()
 
