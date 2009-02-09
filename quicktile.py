@@ -59,15 +59,49 @@ except ImportError:
     XLIB_PRESENT = False
 
 positions = {
-    'left'           : ((0,     0,   0.5,   1  ), (0,         0,   1.0/3, 1  ), (0,     0,   1.0/3 * 2, 1)),
-    'middle'         : ((0,     0,     1,   1  ), (1.0/3,     0,   1.0/3, 1  ), (1.0/6, 0,   1.0/3 * 2, 1)),
-    'right'          : ((0.5,   0,   0.5,   1  ), (1.0/3 * 2, 0,   1.0/3, 1  ), (1.0/3, 0,   1.0/3 * 2, 1)),
-    'top'            : ((0,     0,   1,     0.5), (1.0/3,     0,   1.0/3, 0.5)),
-    'bottom'         : ((0,     0.5, 1,     0.5), (1.0/3,     0.5, 1.0/3, 0.5)),
-    'top-left'       : ((0,     0,   0.5,   0.5), (0,         0,   1.0/3, 0.5), (0,     0,   1.0/3 * 2, 0.5)),
-    'top-right'      : ((0.5,   0,   0.5,   0.5), (1.0/3 * 2, 0,   1.0/3, 0.5), (1.0/3, 0,   1.0/3 * 2, 0.5)),
-    'bottom-left'    : ((0,     0.5, 0.5,   0.5), (0,         0.5, 1.0/3, 0.5), (0,     0.5, 1.0/3 * 2, 0.5)),
-    'bottom-right'   : ((0.5,   0.5, 0.5,   0.5), (1.0/3 * 2, 0.5, 1.0/3, 0.5), (1.0/3, 0.5, 1.0/3 * 2, 0.5)),
+    'left'           : (
+        (0,           0,       1.0 / 2,     1),
+        (0,           0,       1.0 / 3,     1),
+        (0,           0,       1.0 / 3 * 2, 1)
+    ),
+    'middle'         : (
+        (0,           0,       1,           1),
+        (1.0 / 3,     0,       1.0 / 3,     1),
+        (1.0 / 6,     0,       1.0 / 3 * 2, 1)
+    ),
+    'right'          : (
+        (1.0 / 2,     0,       1.0 / 2,     1),
+        (1.0 / 3 * 2, 0,       1.0 / 3,     1),
+        (1.0 / 3,     0,       1.0 / 3 * 2, 1)
+    ),
+    'top'            : (
+        (0,           0,       1,           1.0 / 2),
+        (1.0 / 3,     0,       1.0 / 3,     1.0 / 2)
+    ),
+    'bottom'         : (
+        (0,           1.0 / 2, 1,           1.0 / 2),
+        (1.0 / 3,     1.0 / 2, 1.0 / 3,     1.0 / 2)
+    ),
+    'top-left'       : (
+        (0,           0,       1.0 / 2,     1.0 / 2),
+        (0,           0,       1.0 / 3,     1.0 / 2),
+        (0,           0,       1.0 / 3 * 2, 1.0 / 2)
+    ),
+    'top-right'      : (
+        (1.0 / 2,     0,       1.0 / 2,     1.0 / 2),
+        (1.0 / 3 * 2, 0,       1.0 / 3,     1.0 / 2),
+        (1.0 / 3,     0,       1.0 / 3 * 2, 1.0 / 2)
+    ),
+    'bottom-left'    : (
+        (0,           1.0 / 2, 1.0 / 2,     1.0 / 2),
+        (0,           1.0 / 2, 1.0 / 3,     1.0 / 2),
+        (0,           1.0 / 2, 1.0 / 3 * 2, 1.0 / 2)
+    ),
+    'bottom-right'   : (
+        (1.0 / 2,     1.0 / 2, 1.0 / 2,     1.0 / 2),
+        (1.0 / 3 * 2, 1.0 / 2, 1.0 / 3,     1.0 / 2),
+        (1.0 / 3,     1.0 / 2, 1.0 / 3 * 2, 1.0 / 2)
+    ),
     'maximize'       : 'toggleMaximize',
     'monitor-switch' : 'cycleMonitors',
 }
@@ -88,8 +122,11 @@ if XLIB_PRESENT:
     }
 
 class WindowManager(object):
-    """Once completed, this will be the new, cleaner way to manipulate windows."""
-    def get_active_window():
+    """
+    I represent all interactions with the window manager.
+    """
+
+    def get_active_window(self):
         """
         Retrieve the active window.
 
@@ -98,13 +135,15 @@ class WindowManager(object):
         """
         # Get the root and active window
         root = gtk.gdk.screen_get_default()
-        if root.supports_net_wm_hint("_NET_ACTIVE_WINDOW") and root.supports_net_wm_hint("_NET_WM_WINDOW_TYPE"):
-            win = root.get_active_window()
+        if root.supports_net_wm_hint("_NET_ACTIVE_WINDOW"):
+            if root.supports_net_wm_hint("_NET_WM_WINDOW_TYPE"):
+                win = root.get_active_window()
         else:
             return None
 
         # Do nothing if the desktop is the active window
-        if win.property_get("_NET_WM_WINDOW_TYPE")[-1][0] == '_NET_WM_WINDOW_TYPE_DESKTOP':
+        d = win.property_get("_NET_WM_WINDOW_TYPE")[-1][0]
+        if d == '_NET_WM_WINDOW_TYPE_DESKTOP':
             return None
 
         return win
@@ -123,7 +162,8 @@ class WindowManager(object):
         border, titlebar = self.get_frame_dimensions(win)
         w, h = winw + (border*2), winh + (titlebar+border)
 
-        # Calculate the position of where the wm decorations start (not the window itself)
+        # Calculate the position of where the wm decorations start (not the
+        # window itself)
         screenposx, screenposy = win.get_root_origin()
 
         # Adjust the position to make it relative to the monitor rather than
@@ -152,7 +192,8 @@ class WindowManager(object):
         if not win:
             win, monitorG, winG, monitorID = getGeometries()
 
-        if state is False or (state is None and (win.get_state() & gtk.gdk.WINDOW_STATE_MAXIMIZED)):
+        isMaximized = win.get_state() & gtk.gdk.WINDOW_STATE_MAXIMIZED
+        if state is False or (state is None and isMaximized):
             win.unmaximize() #FIXME: This isn't doing anything for some reason.
         else:
             win.maximize()
@@ -202,13 +243,9 @@ class WindowManager(object):
         """
         # Get the root and active window
         root = gtk.gdk.screen_get_default()
-        if root.supports_net_wm_hint("_NET_ACTIVE_WINDOW") and root.supports_net_wm_hint("_NET_WM_WINDOW_TYPE"):
-            win = win or root.get_active_window()
-        elif not win:
-            return None, None, None
+        win = win or self.get_active_window()
 
-        # Do nothing if the desktop is the active window
-        if win.property_get("_NET_WM_WINDOW_TYPE")[-1][0] == '_NET_WM_WINDOW_TYPE_DESKTOP':
+        if not win:
             return None, None, None
 
         # Calculate the size of the wm decorations
@@ -216,7 +253,8 @@ class WindowManager(object):
         border, titlebar = self.get_frame_dimensions(win)
         w, h = winw + (border*2), winh + (titlebar+border)
 
-        # Calculate the position of where the wm decorations start (not the window itself)
+        # Calculate the position of where the wm decorations start (not the
+        # window itself)
         screenposx, screenposy = win.get_root_origin()
 
         monitorID = root.get_monitor_at_window(win)
@@ -241,8 +279,8 @@ class WindowManager(object):
     def do_cycleMonitors(self, window=None):
         """
         Cycle the specified window (the active window if none was explicitly
-        specified) between monitors while leaving the position within the monitor
-        unchanged.
+        specified) between monitors while leaving the position within the
+        monitor unchanged.
         """
 
         win, monitorG, winG, monitorID = getGeometries()
@@ -270,7 +308,8 @@ if __name__ == '__main__':
     parser = OptionParser(usage="%prog [options] [arguments]",
             version="%%prog v%s" % __version__)
     parser.add_option('-b', '--bindkeys', action="store_true", dest="daemonize",
-        default=False, help="Use python-xlib to set up keybindings and then wait.")
+        default=False,
+        help="Use python-xlib to set up keybindings and then wait.")
     parser.add_option('--valid-args', action="store_true", dest="showArgs",
         default=False, help="List valid arguments for use without --bindkeys.")
 
@@ -290,7 +329,8 @@ if __name__ == '__main__':
         keys = dict([(disp.keysym_to_keycode(x), keys[x]) for x in keys])
 
         for keycode in keys:
-            root.grab_key(keycode, X.ControlMask | X.Mod1Mask, 1, X.GrabModeAsync, X.GrabModeAsync)
+            root.grab_key(keycode, X.ControlMask | X.Mod1Mask, 1,
+                X.GrabModeAsync, X.GrabModeAsync)
 
         # If we don't do this, then nothing works.
         # I assume it flushes the XGrabKey calls to the server.
