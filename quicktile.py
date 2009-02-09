@@ -168,7 +168,7 @@ class WindowManager(object):
 
         Returns the chosen gtk.gdk.Rectangle.
         """
-        win, monitorG, winG = getGeometries(window)[0:3]
+        win, monitorG, winG = self.getGeometries(window)[0:3]
 
         dims = []
         for tup in dimensions:
@@ -184,6 +184,47 @@ class WindowManager(object):
                 break
 
         self.reposition(win, result, monitorG)
+
+    def getGeometries(self, win=None):
+        """
+        Get the geometry for the given window (including window decorations)
+        and the monitor it's on. If not window is specified, the active window
+        is used.
+
+        Window geometry is relative to the monitor, not the desktop.
+
+        Returns a tuple of the window object, two gtk.gdk.Rectangle objects
+        containing the monitor and window geometry, respectively, and the
+        monitor ID (for multi-head desktops).
+
+        Returns (None, None, None) if the specified window is a desktop window
+        or if no window was specified and _NET_ACTIVE_WINDOW is unsupported.
+        """
+        # Get the root and active window
+        root = gtk.gdk.screen_get_default()
+        if root.supports_net_wm_hint("_NET_ACTIVE_WINDOW") and root.supports_net_wm_hint("_NET_WM_WINDOW_TYPE"):
+            win = win or root.get_active_window()
+        elif not win:
+            return None, None, None
+
+        # Do nothing if the desktop is the active window
+        if win.property_get("_NET_WM_WINDOW_TYPE")[-1][0] == '_NET_WM_WINDOW_TYPE_DESKTOP':
+            return None, None, None
+
+        # Calculate the size of the wm decorations
+        winw, winh = win.get_geometry()[2:4]
+        border, titlebar = self.get_frame_dimensions(win)
+        w, h = winw + (border*2), winh + (titlebar+border)
+
+        # Calculate the position of where the wm decorations start (not the window itself)
+        screenposx, screenposy = win.get_root_origin()
+
+        monitorID = root.get_monitor_at_window(win)
+        monitorGeom = root.get_monitor_geometry(monitorID)
+        winGeom = gtk.gdk.Rectangle(screenposx - monitorGeom.x,
+                screenposy - monitorGeom.y, w, h)
+
+        return win, monitorGeom, winGeom, monitorID
 
 
     # command dispatcher
@@ -221,62 +262,6 @@ class WindowManager(object):
 
     def do_toggleMaximize(self, win=None, state=None):
         self.toggleMaximize(self, win, state)
-
-def get_frame_thickness(win):
-    """Given a window, return a (border, titlebar) thickness tuple."""
-    _or, _ror = win.get_origin(), win.get_root_origin()
-    return _or[0] - _ror[0], _or[1] - _ror[1]
-
-def positionWindow(win, geom, monitor = gtk.gdk.Rectangle(0,0,0,0)):
-    """
-    Position and size a window, decorations inclusive.
-
-    The optional monitor argument allows use with geometry rectangles
-    where the monitor offest hasn't been pre-calculated.
-    """
-    border, titlebar = get_frame_thickness(win)
-    win.move_resize(geom.x + monitor.x, geom.y + monitor.y,
-            geom.width - (border * 2), geom.height - (titlebar + border))
-
-def getGeometries(win=None):
-    """
-    Get the geometry for the given window (including window decorations) and
-    the monitor it's on. If not window is specified, the active window is used.
-
-    Window geometry is relative to the monitor, not the desktop.
-
-    Returns a tuple of the window object, two gtk.gdk.Rectangle objects
-    containing the monitor and window geometry, respectively, and the monitor ID
-    (for multi-head desktops).
-
-    Returns (None, None, None) if the specified window is a desktop window or
-    if no window was specified and _NET_ACTIVE_WINDOW is unsupported.
-    """
-    # Get the root and active window
-    root = gtk.gdk.screen_get_default()
-    if root.supports_net_wm_hint("_NET_ACTIVE_WINDOW") and root.supports_net_wm_hint("_NET_WM_WINDOW_TYPE"):
-        win = win or root.get_active_window()
-    elif not win:
-        return None, None, None
-
-    # Do nothing if the desktop is the active window
-    if win.property_get("_NET_WM_WINDOW_TYPE")[-1][0] == '_NET_WM_WINDOW_TYPE_DESKTOP':
-        return None, None, None
-
-    # Calculate the size of the wm decorations
-    winw, winh = win.get_geometry()[2:4]
-    border, titlebar = get_frame_thickness(win)
-    w, h = winw + (border*2), winh + (titlebar+border)
-
-    # Calculate the position of where the wm decorations start (not the window itself)
-    screenposx, screenposy = win.get_root_origin()
-
-    monitorID = root.get_monitor_at_window(win)
-    monitorGeom = root.get_monitor_geometry(monitorID)
-    winGeom = gtk.gdk.Rectangle(screenposx - monitorGeom.x,
-            screenposy - monitorGeom.y, w, h)
-
-    return win, monitorGeom, winGeom, monitorID
 
 if __name__ == '__main__':
     wm = WindowManager()
