@@ -58,7 +58,7 @@ try:
 except ImportError:
     XLIB_PRESENT = False
 
-positions = {
+POSITIONS = {
     'left'           : (
         (0,           0,       1.0 / 2,     1),
         (0,           0,       1.0 / 3,     1),
@@ -268,7 +268,7 @@ class WindowManager(object):
     # command dispatcher
     def doCommand(self, command):
         """Resolve a textual positioning command and execute it."""
-        command = positions[command]
+        command = POSITIONS[command]
         if isinstance(command, (tuple, list)):
             self.cycleDimensions(command)
         else:
@@ -349,10 +349,10 @@ if __name__ == '__main__':
         gobject.io_add_watch(root.display, gobject.IO_IN, handle_xevent)
         gtk.main()
     elif not opts.daemonize:
-        badArgs = [x for x in args if x not in positions]
+        badArgs = [x for x in args if x not in POSITIONS]
         if not args or badArgs or opts.showArgs:
             # sorted() was added in 2.4 and everything else should be 2.3-safe.
-            validArgs = list(positions)
+            validArgs = list(POSITIONS)
             validArgs.sort()
 
             if badArgs:
