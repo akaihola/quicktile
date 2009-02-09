@@ -186,8 +186,15 @@ class WindowManager(object):
         as a whole.
         """
         border, titlebar = self.get_frame_dimensions(win)
-        win.move_resize(geom.x + monitor.x, geom.y + monitor.y,
-                geom.width - (border * 2), geom.height - (titlebar + border))
+        x, y = geom.x + monitor.x, geom.y + monitor.y,
+        w, h = geom.width - (border * 2), geom.height - (titlebar + border)
+        logging.debug('reposition: to (%d, %d), %dx%d' % (x, y, w, h))
+        win.move_resize(x, y, w, h)
+        # FIXME: for some reason, doing them separate succeeds better in
+        # metacity; try win.move_resize(2432, 384, 504, 358) as an example
+        # on my 1920x1200/1024x768 multihead
+        win.move(x, y)
+        win.resize(w, h)
 
     def toggleMaximize(self, win=None, state=None):
         if not win:
@@ -202,7 +209,7 @@ class WindowManager(object):
     def cycleDimensions(self, dimensions, window=None):
         """
         Given a window and a list of 4-tuples containing dimensions as a
-        decimal percentage of monitor size, cycle through the list, taking one
+        fraction of monitor size, cycle through the list, taking one
         step each time this function is called.
 
         If the window's dimensions are not in the list, set them to the first
@@ -219,19 +226,30 @@ class WindowManager(object):
                          int(tup[2] * monitorG.width),
                          int(tup[3] * monitorG.height)))
 
-        result = gtk.gdk.Rectangle(*dims[0])
+        result = None
+
         for pos, val in enumerate(dims):
+            logging.debug('matching against slot %d, geometry %r' % (
+                pos, tuple(val)))
             if tuple(winG) == tuple(val):
                 result = gtk.gdk.Rectangle(*dims[(pos + 1) % len(dims)])
+                logging.debug('selected slot %d, geometry %r' % (
+                    pos, tuple(result)))
                 break
+
+        if not result:
+            result = gtk.gdk.Rectangle(*dims[0])
+            logging.debug('no match, picked first slot, geometry %r' % (
+                tuple(result), ))
 
         self.reposition(win, result, monitorG)
 
     def getGeometries(self, win=None):
         """
-        Get the geometry for the given window (including window decorations)
-        and the monitor it's on. If no window is specified, the active window
-        is used.
+        Get the geometries for both the given window (including window
+        decorations) and the physical monitor it's on (including panels). 
+
+        If no window is specified, the active window and its monitor are used.
 
         Window geometry is returned relative to the monitor, not the desktop.
 
