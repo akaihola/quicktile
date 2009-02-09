@@ -127,6 +127,9 @@ class WindowManager(object):
     I represent all interactions with the window manager.
     """
 
+    def __init__(self):
+        self._root = gtk.gdk.screen_get_default()
+
     def get_active_window(self):
         """
         Retrieve the active window.
@@ -135,10 +138,9 @@ class WindowManager(object):
         active window is the desktop.
         """
         # Get the root and active window
-        root = gtk.gdk.screen_get_default()
-        if root.supports_net_wm_hint("_NET_ACTIVE_WINDOW"):
-            if root.supports_net_wm_hint("_NET_WM_WINDOW_TYPE"):
-                win = root.get_active_window()
+        if self._root.supports_net_wm_hint("_NET_ACTIVE_WINDOW"):
+            if self._root.supports_net_wm_hint("_NET_WM_WINDOW_TYPE"):
+                win = self._root.get_active_window()
         else:
             return None
 
@@ -170,8 +172,8 @@ class WindowManager(object):
         # Adjust the position to make it relative to the monitor rather than
         # the desktop
         #FIXME: How do I retrieve the root window from a given one?
-        monitorID = root.get_monitor_at_window(win)
-        monitorGeom = root.get_monitor_geometry(monitorID)
+        monitorID = self._root.get_monitor_at_window(win)
+        monitorGeom = self._root.get_monitor_geometry(monitorID)
         winGeom = gtk.gdk.Rectangle(screenposx - monitorGeom.x,
                 screenposy - monitorGeom.y, w, h)
 
@@ -186,7 +188,7 @@ class WindowManager(object):
         as a whole.
         """
         border, titlebar = self.get_frame_dimensions(win)
-        x, y = geom.x + monitor.x, geom.y + monitor.y,
+        x, y = geom.x + monitor.x, geom.y + monitor.y
         w, h = geom.width - (border * 2), geom.height - (titlebar + border)
         logging.debug('reposition: to (%d, %d), %dx%d' % (x, y, w, h))
         win.move_resize(x, y, w, h)
@@ -264,25 +266,13 @@ class WindowManager(object):
          - no window was specified and _NET_ACTIVE_WINDOW is unsupported.
         """
         # Get the root and active window
-        root = gtk.gdk.screen_get_default()
         win = win or self.get_active_window()
 
         if not win:
             return None, None, None, None
 
-        # Calculate the size of the wm decorations
-        winw, winh = win.get_geometry()[2:4]
-        border, titlebar = self.get_frame_dimensions(win)
-        w, h = winw + (border*2), winh + (titlebar+border)
-
-        # Calculate the position of where the wm decorations start (not the
-        # window itself)
-        screenposx, screenposy = win.get_root_origin()
-
-        monitorID = root.get_monitor_at_window(win)
-        monitorGeom = root.get_monitor_geometry(monitorID)
-        winGeom = gtk.gdk.Rectangle(screenposx - monitorGeom.x,
-                screenposy - monitorGeom.y, w, h)
+        monitorGeom, winGeom = self.get_combined_dimensions(win)
+        monitorID = self._root.get_monitor_at_window(win)
 
         logging.debug('getGeometries: monitorId: %r' % (monitorID, ))
         logging.debug('getGeometries: monitorGeom: %r' % (tuple(monitorGeom), ))
@@ -310,11 +300,10 @@ class WindowManager(object):
 
         win, monitorG, winG, monitorID = getGeometries()
 
-        root = gtk.gdk.screen_get_default()
-        monitorCount = root.get_n_monitors()
+        monitorCount = self._root.get_n_monitors()
 
         newMonitorID = (monitorID + 1 < monitorCount) and monitorID + 1 or 0
-        newMonitorG = root.get_monitor_geometry(newMonitorID)
+        newMonitorG = self._root.get_monitor_geometry(newMonitorID)
 
         if win.get_state() & gtk.gdk.WINDOW_STATE_MAXIMIZED:
             self.toggleMaximize(win)
