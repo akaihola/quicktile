@@ -109,12 +109,12 @@ class WindowManager(object):
 
         return win
 
-    def get_frame_dimensions(win):
+    def get_frame_dimensions(self, win):
         """Given a window, return a (border, titlebar) thickness tuple."""
         _or, _ror = win.get_origin(), win.get_root_origin()
         return _or[0] - _ror[0], _or[1] - _ror[1]
 
-    def get_combined_dimensions(win):
+    def get_combined_dimensions(self, win):
         """Given a window, return the rectangle for its dimensions (frame
         included) relative to the monitor and the rectangle for the monitor in
         question."""
@@ -136,7 +136,7 @@ class WindowManager(object):
 
         return monitorGeom, winGeom
 
-    def reposition(win, geom, monitor=gtk.gdk.Rectangle(0,0,0,0)):
+    def reposition(self, win, geom, monitor=gtk.gdk.Rectangle(0,0,0,0)):
         """
         Position and size a window, decorations inclusive, according to the
         provided target window and monitor geometry rectangles.
@@ -144,7 +144,7 @@ class WindowManager(object):
         If no monitor rectangle is specified, position relative to the desktop
         as a whole.
         """
-        border, titlebar = get_frame_dimensions(win)
+        border, titlebar = self.get_frame_dimensions(win)
         win.move_resize(geom.x + monitor.x, geom.y + monitor.y,
                 geom.width - (border * 2), geom.height - (titlebar + border))
 
@@ -157,12 +157,41 @@ class WindowManager(object):
         else:
             win.maximize()
 
+    def cycleDimensions(self, dimensions, window=None):
+        """
+        Given a window and a list of 4-tuples containing dimensions as a
+        decimal percentage of monitor size, cycle through the list, taking one
+        step each time this function is called.
+
+        If the window's dimensions are not in the list, set them to the first
+        list entry.
+
+        Returns the chosen gtk.gdk.Rectangle.
+        """
+        win, monitorG, winG = getGeometries(window)[0:3]
+
+        dims = []
+        for tup in dimensions:
+            dims.append((int(tup[0] * monitorG.width),
+                         int(tup[1] * monitorG.height),
+                         int(tup[2] * monitorG.width),
+                         int(tup[3] * monitorG.height)))
+
+        result = gtk.gdk.Rectangle(*dims[0])
+        for pos, val in enumerate(dims):
+            if tuple(winG) == tuple(val):
+                result = gtk.gdk.Rectangle(*dims[(pos + 1) % len(dims)])
+                break
+
+        self.reposition(win, result, monitorG)
+
+
     # command dispatcher
     def doCommand(self, command):
         """Resolve a textual positioning command and execute it."""
         command = positions[command]
         if isinstance(command, (tuple, list)):
-            cycleDimensions(command)
+            self.cycleDimensions(command)
         else:
             methodName = 'do_' + command
             getattr(self, methodName)()
@@ -184,11 +213,11 @@ class WindowManager(object):
         newMonitorG = root.get_monitor_geometry(newMonitorID)
 
         if win.get_state() & gtk.gdk.WINDOW_STATE_MAXIMIZED:
-            toggleMaximize(win)
-            positionWindow(win, winG, newMonitorG)
-            toggleMaximize(win)
+            self.toggleMaximize(win)
+            self.reposition(win, winG, newMonitorG)
+            self.toggleMaximize(win)
         else:
-            positionWindow(win, winG, newMonitorG)
+            self.reposition(win, winG, newMonitorG)
 
     def do_toggleMaximize(self, win=None, state=None):
         self.toggleMaximize(self, win, state)
@@ -248,34 +277,6 @@ def getGeometries(win=None):
             screenposy - monitorGeom.y, w, h)
 
     return win, monitorGeom, winGeom, monitorID
-
-def cycleDimensions(dimensions, window=None):
-    """
-    Given a window and a list of 4-tuples containing dimensions as a decimal
-    percentage of monitor size, cycle through the list, taking one step each
-    time this function is called.
-
-    If the window's dimensions are not in the list, set them to the first list
-    entry.
-
-    Returns the chosen gtk.gdk.Rectangle.
-    """
-    win, monitorG, winG = getGeometries(window)[0:3]
-
-    dims = []
-    for tup in dimensions:
-        dims.append((int(tup[0] * monitorG.width),
-                     int(tup[1] * monitorG.height),
-                     int(tup[2] * monitorG.width),
-                     int(tup[3] * monitorG.height)))
-
-    result = gtk.gdk.Rectangle(*dims[0])
-    for pos, val in enumerate(dims):
-        if tuple(winG) == tuple(val):
-            result = gtk.gdk.Rectangle(*dims[(pos + 1) % len(dims)])
-            break
-
-    positionWindow(win, result, monitorG)
 
 if __name__ == '__main__':
     wm = WindowManager()
