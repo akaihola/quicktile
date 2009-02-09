@@ -245,7 +245,7 @@ class WindowManager(object):
         for pos, val in enumerate(dims):
             logging.debug('matching against slot %d, geometry %r' % (
                 pos, tuple(val)))
-            if tuple(winG) == tuple(val):
+            if self.match(win, winG, val):
                 result = gtk.gdk.Rectangle(*dims[(pos + 1) % len(dims)])
                 logging.debug('selected slot %d, geometry %r' % (
                     pos, tuple(result)))
@@ -257,6 +257,13 @@ class WindowManager(object):
                 tuple(result), ))
 
         self.reposition(win, result, monitorG)
+
+    def match(self, win, framedGeom, targetGeom):
+        """
+        Check if the framed geometry for the window is a close enough match
+        for the target framed geometry.
+        """
+        return tuple(framedGeom) == tuple(targetGeom)
 
     def getGeometries(self, win=None):
         """
