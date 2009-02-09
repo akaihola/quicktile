@@ -128,6 +128,8 @@ class WindowManager(object):
     """
 
     def __init__(self):
+        # FIXME: this assumes the root window never changes; verify
+        # if this is the case, even in daemon mode ?
         self._root = gtk.gdk.screen_get_default()
 
     def get_active_window(self):
