@@ -231,13 +231,15 @@ class WindowManager(object):
         win.resize(w, h)
 
     def toggleMaximize(self, win=None, state=None):
-        if not win:
-            win, monitorG, winG, monitorID = getGeometries()
+        win = win or self.get_active_window()
 
+        # FIXME: get_state() still reports 0 on maximized windows
         isMaximized = win.get_state() & gtk.gdk.WINDOW_STATE_MAXIMIZED
         if state is False or (state is None and isMaximized):
+            logging.debug('unmaximize')
             win.unmaximize() #FIXME: This isn't doing anything for some reason.
         else:
+            logging.debug('maximize')
             win.maximize()
 
     def cycleDimensions(self, dimensions, window=None):
@@ -369,7 +371,7 @@ class WindowManager(object):
             self.reposition(win, winG, newMonitorG)
 
     def do_toggleMaximize(self, win=None, state=None):
-        self.toggleMaximize(self, win, state)
+        self.toggleMaximize(win, state)
 
 if __name__ == '__main__':
     wm = WindowManager()
@@ -402,6 +404,7 @@ if __name__ == '__main__':
         root = disp.screen().root
 
         # We want to receive KeyPress events
+        logging.debug('asking for KeyPress')
         root.change_attributes(event_mask = X.KeyPressMask)
         keys = dict([(disp.keysym_to_keycode(x), keys[x]) for x in keys])
 
@@ -419,6 +422,7 @@ if __name__ == '__main__':
                 xevent = handle.next_event()
                 if xevent.type == X.KeyPress:
                     keycode = xevent.detail
+                    logging.debug('pressed %r' % keys[keycode])
                     wm.doCommand(keys[keycode])
             return True
 
