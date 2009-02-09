@@ -159,13 +159,17 @@ class WindowManager(object):
         return _or[0] - _ror[0], _or[1] - _ror[1]
 
     def get_combined_dimensions(self, win):
-        """Given a window, return the rectangle for its dimensions (frame
-        included) relative to the monitor and the rectangle for the monitor in
-        question."""
+        """
+        Given a window, return a tuple of:
+         - the rectangle for its dimensions (decorations included),
+           relative to the monitor the window is on
+         - the rectangle for the monitor the window is in (panels included),
+           relative to the root window
+        """
         # Calculate the size of the wm decorations
         winw, winh = win.get_geometry()[2:4]
         border, titlebar = self.get_frame_dimensions(win)
-        w, h = winw + (border*2), winh + (titlebar+border)
+        w, h = winw + (border * 2), winh + (titlebar + border)
 
         # Calculate the position of where the wm decorations start (not the
         # window itself)
@@ -176,12 +180,16 @@ class WindowManager(object):
         #FIXME: How do I retrieve the root window from a given one?
         monitorID = self._root.get_monitor_at_window(win)
         monitorGeom = self._root.get_monitor_geometry(monitorID)
-        winGeom = gtk.gdk.Rectangle(screenposx - monitorGeom.x,
+        winFramedGeom = gtk.gdk.Rectangle(screenposx - monitorGeom.x,
                 screenposy - monitorGeom.y, w, h)
+        logging.debug('get_combined_dimensions: monitorGeom: %r' % (
+            tuple(monitorGeom), ))
+        logging.debug('get_combined_dimensions: winFramedGeom: %r' % (
+            tuple(winFramedGeom), ))
 
-        return monitorGeom, winGeom
+        return monitorGeom, winFramedGeom
 
-    def reposition(self, win, geom, monitor=gtk.gdk.Rectangle(0,0,0,0)):
+    def reposition(self, win, framedGeom, monitor=gtk.gdk.Rectangle(0,0,0,0)):
         """
         Position and size a window, decorations inclusive, according to the
         provided target window and monitor geometry rectangles.
@@ -190,8 +198,10 @@ class WindowManager(object):
         as a whole.
         """
         border, titlebar = self.get_frame_dimensions(win)
-        x, y = geom.x + monitor.x, geom.y + monitor.y
-        w, h = geom.width - (border * 2), geom.height - (titlebar + border)
+        x, y = framedGeom.x + monitor.x, framedGeom.y + monitor.y
+        w = framedGeom.width - (border * 2)
+        h = framedGeom.height - (titlebar + border)
+
         logging.debug('reposition: to (%d, %d), %dx%d' % (x, y, w, h))
         win.move_resize(x, y, w, h)
         # FIXME: for some reason, doing them separate succeeds better in
@@ -277,8 +287,6 @@ class WindowManager(object):
         monitorID = self._root.get_monitor_at_window(win)
 
         logging.debug('getGeometries: monitorId: %r' % (monitorID, ))
-        logging.debug('getGeometries: monitorGeom: %r' % (tuple(monitorGeom), ))
-        logging.debug('getGeometries: winGeom: %r' % (tuple(winGeom), ))
         return win, monitorGeom, winGeom, monitorID
 
 
