@@ -1,0 +1,51 @@
+- X has multiple monitors, identified by monitorId
+- get_monitor_geometry(monitorId) returns x, y, w, h
+  - with x, y being the top left corner in the whole X layout
+  - w, h being the width and height of that monitor
+- 
+
+- a window has WM_SIZE_HINTS; example, gnome-terminal on ana:
+  - with tabs:
+    - minimum: 48 by 64
+    - increment:7 by 15
+    - base size: 20 by 34
+  - without tabs:
+    - minimum: 44 by 32
+    - increment: 7 by 15
+    - base size: 16 by 2
+
+- function specifics:
+  - gdk_window_move: sets x, y position of window including decorations
+  - gdk_window_resize: sets w, h of window excluding decorations
+  - gdk_window_get_geometry: x, y are relative to decorations for toplevel
+    windows; ie gives you border and title bar
+  - root.get_monitor_geometry gets the full display area of the given monitor
+    (including panels)
+In [13]: tuple(root.get_monitor_geometry(0))
+Out[13]: (0, 0, 1920, 1200)
+
+In [14]: tuple(root.get_monitor_geometry(1))
+Out[14]: (1920, 0, 1024, 768)
+  - rootwin.property_get('_NET_WORKAREA') gives 4 times the usable (nonpanel)
+    area of the first monitor:
+('CARDINAL',
+ 32,
+ [0, 25, 1920, 1150, 0, 25, 1920, 1150, 0, 25, 1920, 1150, 0, 25, 1920, 1150])
+
+
+- experiment from ipython with:
+ipython -gthread (to make sure move/resize happens immediately)
+import gtk.gdk
+root = gtk.gdk.screen_get_default()
+win = root.get_active_window()
+
+- some results:
+  - ask for resize to 200, 200 of a g-t window
+  - get_geometry then returns: (4, 22, 198, 197, 24)
+  - gimp of screenshot says 206x223 (which includes border and title)
+  - so get_geometry returns inside of window as w/h (no decorations)
+
+- the goal should be to:
+  - split the workarea excluding panels) of a monitor in 2x2 or 3x3 grids
+  - position the window, including decorations, on those grids
+
